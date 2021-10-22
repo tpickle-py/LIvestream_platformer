@@ -1,12 +1,7 @@
 import pygame
-from images import *
-from player import Player
-from block import Block
-from crate import Crate
-from platform import Platform
-from spike import Spike
-from door import Door
+import json
 pygame.init()
+pygame.font.init()
 
 # GAME INFORMATION
 TITLE = "Hugo The Huge"
@@ -17,15 +12,40 @@ WIDTH, HEIGHT = 1000, 700
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption(TITLE)
 
+from images import *
+from player import Player
+from block import Block
+from crate import Crate
+from platform import Platform
+from spike import Spike
+from door import Door
+
 # COLORS
 WHITE = (255, 255, 255)
 BACKGROUND = BACKGROUND.convert_alpha()
 
 # SCROLLING
-MOVEMENT_BORDER_LEFT = 250
-MOVEMENT_BORDER_RIGHT = 750
+MOVEMENT_BORDER_LEFT = 300
+MOVEMENT_BORDER_RIGHT = 500
 offset = 0
 
+# LEVELS
+LEVEL1 = "level2.json"
+
+# FONTS
+FONT_30 = pygame.font.SysFont('comicsans', 30)
+FONT_90 = pygame.font.SysFont('comicsans', 90)
+
+def blit_text_center(text, win, color):
+    render = FONT_90.render(text, 1, color)
+    win.blit(render, (WIDTH // 2 - render.get_width() // 2, HEIGHT // 2 - render.get_height() // 2))
+    pygame.display.update()
+
+def load_level(name):
+    with open(name, "r") as json_file:
+        level = json.load(json_file)["data"]
+
+    return level
 
 def draw(win, player, objects, offset):
     win.blit(BACKGROUND, (0, 0))
@@ -39,6 +59,9 @@ def draw(win, player, objects, offset):
 
 def check_vertical_collision(player, objects):
     for block in objects:
+        if abs(player.y - block.y) > 100 or abs(player.x - block.x) > 100:
+            continue
+
         result = player.collide(block)
         if not result:
             continue
@@ -57,6 +80,9 @@ def check_vertical_collision(player, objects):
 
 def check_horizontal_collision(player, objects):
     for block in walls:
+        if abs(player.y - block.y) > 100 or abs(player.x - block.x) > 100:
+            continue
+
         result = player.collide(block)
         if not result:
             continue
@@ -73,6 +99,9 @@ def check_horizontal_collision(player, objects):
 
 def check_crate_collision(player, objects, walls):
     for crate in objects:
+        if abs(player.y - crate.y) > 100 or abs(player.x - crate.x) > 100:
+            continue
+
         result = player.collide(crate)
         if not result:
             continue
@@ -105,6 +134,9 @@ def check_crate_collision(player, objects, walls):
 
 def check_platform_collision(player, objects):
     for block in objects:
+        if abs(player.y - block.y) > 100 or abs(player.x - block.x) > 100:
+            continue
+
         result = player.collide(block)
         if not result:
             continue
@@ -120,34 +152,58 @@ def check_platform_collision(player, objects):
             break
 
 
+create_objects = {
+    "floor": Block,
+    "wall": Block,
+    "crate": Crate,
+    "platform": Platform,
+    "spike": Spike,
+    "door": Door
+}
+
 run = True
 
-player = Player(700, 410, "left", WIDTH, HEIGHT)
+player = Player(100, 410, "left", WIDTH, HEIGHT)
 clock = pygame.time.Clock()
 
-floors = [
-    Block(100, 530, BLOCKS[0]),
-    Block(140, 530, BLOCKS[0]),
-    Block(180, 530, BLOCKS[0]),
-    Block(300, 550, BLOCKS[0], 90)
-]
+floors = []
 
-walls = [Block(300, 570, BLOCKS[0], 90),
-         Block(300, 610, BLOCKS[0], 90)]
+walls = []
 
-crates = [Crate(700, 570)]
+crates = []
 
-for i in range((WIDTH // 38) + 1):
-    bloc = Block(i * 38, 670, BLOCKS[0])
-    floors.append(bloc)
-
-platforms = [Platform(300, 500, 100, 0)]
+platforms = []
 
 spikes = []
 
-door = Door(400, 600)
+doors = []
 
-objects = floors + walls + crates + platforms + spikes + [door]
+level = load_level(LEVEL1)
+
+for obj in level:
+    x, y = round(obj['x']), round(obj['y'])
+    create = obj["type"]
+    if create == "floor":
+        obj = Block(x, y, BLOCKS[0])
+        floors.append(obj)
+    elif create == "wall":
+        obj = Block(x, y, BLOCKS[5])
+        walls.append(obj)
+    elif create == "crate":
+        obj = Crate(x, y)
+        crates.append(obj)
+    elif create == "platform":
+        obj = Platform(x, y)
+        platforms.append(obj)
+    elif create == "spike":
+        obj = Spike(x, y)
+        spikes.append(obj)
+    elif create == "door":
+        obj = Door(x, y)
+        doors.append(obj)
+
+
+objects = floors + walls + crates + platforms + spikes + doors
 
 while run:
     clock.tick(MAX_FPS)
@@ -170,12 +226,14 @@ while run:
     for spike in spikes:
         if player.collide(spike):
             player.die()
-            # TODO GAME IS OVER!
+            blit_text_center("You died... Try again!", WIN, (0, 0, 0))
+            pygame.time.delay(3000)
 
-    if player.collide(door):
-        if keys[pygame.K_w]:
-            # next level
-            pass
+    for door in doors:
+        if player.collide(door):
+            if keys[pygame.K_w]:
+                # next level
+                pass
 
     if player.x <= MOVEMENT_BORDER_LEFT:
         offset = player.x - MOVEMENT_BORDER_LEFT
